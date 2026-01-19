@@ -11,7 +11,6 @@ def scrape_mse_data():
         return None
 
     soup = BeautifulSoup(response.content, "html.parser")
-    # MSE table rows usually live in a standard <table> or <tbody>
     rows = soup.find("tbody").find_all("tr")
     # print(rows)
 

@@ -1,0 +1,54 @@
+{
+    "AIRTEL": {
+        "articles": [
+            {"title": "Airtel Malawi HY2025 Financials", "date": "2025-09-25", "url": "https://mse.co.mw/company/MWAIRT001156"},
+            {"title": "Airtel Africa Profit Soars 375% in H1 2025", "date": "2025-10-29", "url": "https://www.ecofinagency.com/news-finances/2910-49936-airtel-africa-profit-soars-375-in-h1-2025-on-data-and-mobile-money-growth"}
+        ],
+        "trading_updates": [
+            {"title": "New Managing Director Appointment - Aashish Dutt", "date": "2025-01-23", "type": "Corporate Change"},
+            {"title": "FY2024 Final Dividend Notice", "date": "2025-07-08", "type": "Dividend"}
+        ],
+        "podcasts": []
+    },
+    "FDHB": {
+        "articles": [
+            {"title": "FDH Bank Posts Record-Breaking Profits to K151 Billion", "date": "2025-12-19", "url": "https://news.frontierafricareports.com/article/fdh-bank-posts-record-breaking-profits-nearly-doubling-earnings-to-k151-billion"},
+            {"title": "FDH Bank Acquires Ecobank Mozambique", "date": "2025-08-13", "url": "https://www.fdh.co.mw/fdhbankplc/blog"}
+        ],
+        "trading_updates": [
+            {"title": "Profit Projected to Rise to K151 Billion", "date": "2025-12-23", "type": "Earnings Guidance"},
+            {"title": "FDH Bank Hits K4.7 Trillion Market Cap Milestone", "date": "2025-08-13", "type": "Market Performance"}
+        ],
+        "podcasts": []
+    },
+    "ILLOVO": {
+        "articles": [
+            {"title": "Illovo Sugar reports 250% jump in profit", "date": "2025-12-04", "url": "https://www.sugaronline.com/2025/12/18/malawi-illovo-sugars-production-falls-25-from-peak-due-to-adverse-weather/"},
+            {"title": "IFC Partners with Illovo Sugar for Sustainable Agriculture", "date": "2025-11-07", "url": "https://www.ifc.org/en/pressroom/2025/ifc-partners-with-illovo-sugar-malawi-to-drive-sustainable-agriculture-and-job-cre"}
+        ],
+        "trading_updates": [
+            {"title": "Production Falls 25% Due to Adverse Weather", "date": "2025-12-18", "type": "Operational Update"}
+        ],
+        "podcasts": []
+    },
+    "TNM": {
+        "articles": [
+            {"title": "TNM Secures License Renewal for 5G Future", "date": "2026-01-14", "url": "https://techafricanews.com/2024/08/27/tnm-secures-license-renewal-paving-the-way-for-malawis-5g-future/"}
+        ],
+        "trading_updates": [
+            {"title": "End of 19-Year Super League Sponsorship Romance", "date": "2026-01-16", "type": "Corporate Strategy"}
+        ],
+        "podcasts": [
+             {"title": "MIJ FM: Business Face of 2025 Recap", "url": "https://www.youtube.com/watch?v=6KDtiiANnWU", "date": "2025-12-31"}
+        ]
+    },
+    "NBM": {
+        "articles": [
+            {"title": "NBM plc appoints Grant Kabango as Board Chairman", "date": "2025-12-04", "url": "https://www.natbank.co.mw/"}
+        ],
+        "trading_updates": [
+            {"title": "53rd AGM Notice and Reference Rate Update", "date": "2025-06-30", "type": "Corporate/Policy"}
+        ],
+        "podcasts": []
+    }
+}
