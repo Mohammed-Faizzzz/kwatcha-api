@@ -4,11 +4,22 @@ from scraper import scrape_mse_data
 
 app = FastAPI(title="Malawi Trading API")
 
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Temporary in-memory cache for MVP
 cache = {
     "last_updated": None,
     "data": []
 }
+@app.get("/")
+async def root():
+    return {"message": "Welcome to the Malawi Trading API. Access /stocks for market data."}
 
 @app.get("/stocks")
 async def get_stocks():
