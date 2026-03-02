@@ -183,3 +183,13 @@ async def create_account(
     print("=" * 50)
 
     return {"message": f"Application received for {username}"}
+
+@app.post("/login")
+async def login(credentials: dict):
+    username = credentials.get("username")
+    password = credentials.get("password")
+
+    print(f"Login attempt: username={username}")
+
+    # Placeholder — always succeeds until DB is set up
+    return {"message": f"Login successful for {username}"}
