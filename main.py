@@ -193,3 +193,16 @@ async def login(credentials: dict):
 
     # Placeholder — always succeeds until DB is set up
     return {"message": f"Login successful for {username}"}
+
+@app.post("/orders")
+async def place_order(order: dict):
+    username = order.get("username")
+    ticker = order.get("ticker")
+    order_type = order.get("type")  # "buy" or "sell"
+    shares = order.get("shares")
+    price = order.get("price")
+
+    print(f"ORDER: {order_type.upper()} {shares} x {ticker} @ {price} for user={username}")
+
+    # Placeholder — wire to DB later
+    return {"message": f"{order_type.capitalize()} order received for {shares} shares of {ticker}"}
