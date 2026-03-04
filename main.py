@@ -1,7 +1,10 @@
+from supabase import create_client, Client
 from datetime import datetime
 from scraper import scrape_mse_data
 from fastapi import FastAPI, HTTPException, Form, File, UploadFile
-
+import os
+from dotenv import load_dotenv
+load_dotenv()  # Load environment variables from .env file
 app = FastAPI(title="Malawi Trading API")
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +14,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+URL = os.getenv("SUPABASE_URL")
+KEY = os.getenv("SUPABASE_ANON_KEY")
+
+supabase: Client = create_client(URL, KEY)
 
 # Temporary in-memory cache for MVP
 cache = {
@@ -51,6 +59,7 @@ historic_data = {
         {"date": "2023-01-02", "price": 21.0, "volume": 2500},
     ]
 }
+
 @app.get("/historic/{symbol}")
 async def get_historic_data(symbol: str):
     # Implement logic to retrieve historic data for the given symbol
@@ -126,59 +135,48 @@ async def create_account(
     print("NEW ACCOUNT APPLICATION RECEIVED")
     print("=" * 50)
 
-    # Text fields
-    fields = {
-        "account_type": account_type,
-        "full_name": full_name,
-        "gender": gender,
-        "id_type": id_type,
-        "id_number": id_number,
-        "date_of_birth": date_of_birth,
-        "investor_type": investor_type,
-        "joint_full_name": joint_full_name,
-        "joint_gender": joint_gender,
-        "joint_id_type": joint_id_type,
-        "joint_id_number": joint_id_number,
-        "joint_date_of_birth": joint_date_of_birth,
-        "joint_investor_type": joint_investor_type,
-        "company_name": company_name,
-        "registration_number": registration_number,
-        "date_of_registration": date_of_registration,
-        "authorised_signatory_1": authorised_signatory_1,
-        "authorised_signatory_2": authorised_signatory_2,
-        "physical_address": physical_address,
-        "postal_address": postal_address,
-        "telephone": telephone,
-        "cellphone": cellphone,
-        "fax": fax,
-        "email": email,
-        "bank_name": bank_name,
-        "bank_branch_code": bank_branch_code,
-        "account_number": account_number,
-        "account_name": account_name,
-        "primary_signature_date": primary_signature_date,
-        "joint_signature_date": joint_signature_date,
-        "username": username,
-        "password": "***hidden***",
-    }
+    try:
+        # 1. Sign up the user (Supabase handles the password hashing)
+        auth_response = supabase.auth.sign_up({
+            "email": email,
+            "password": password,
+        })
+        
+        if not auth_response.user:
+            raise HTTPException(status_code=400, detail="Signup failed")
+        
+        user_id = auth_response.user.id
 
-    print("\n-- TEXT FIELDS --")
-    for key, value in fields.items():
-        if value is not None:
-            print(f"  {key}: {value}")
+        # 2. Upload KYC Files to Private Storage
+        # We organize folders by user_id to keep documents segregated
+        uploads = [
+            ("certified_id", certified_id),
+            ("passport_photo_1", passport_photo_1),
+            ("proof_of_address", proof_of_address),
+        ]
+        for name, file in uploads:
+            if file and file.filename:
+                path = f"{user_id}/{name}_{file.filename}"
+                content = await file.read()
+                supabase.storage.from_("kyc-documents").upload(path, content)
 
-    print("\n-- FILE UPLOADS --")
-    for name, upload in [
-        ("certified_id", certified_id),
-        ("passport_photo_1", passport_photo_1),
-        ("passport_photo_2", passport_photo_2),
-        ("proof_of_address", proof_of_address),
-        ("company_docs", company_docs),
-    ]:
-        if upload and upload.filename:
-            print(f"  {name}: {upload.filename} ({upload.content_type})")
-        else:
-            print(f"  {name}: not provided")
+        # 3. Insert detailed profile data into public.profiles
+        # Map your large form into a single dictionary
+        profile_data = {
+            "id": user_id, # Link to the Auth user
+            "account_type": account_type,
+            "full_name": full_name,
+            "id_number": id_number,
+            "bank_name": bank_name,
+            "account_number": account_number,
+            "balance": 0.00 # Initializing account balance
+        }
+        supabase.table("profiles").insert(profile_data).execute()
+
+        return {"message": "Account created. Please verify your email."}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
     print("=" * 50)
 
@@ -186,23 +184,34 @@ async def create_account(
 
 @app.post("/login")
 async def login(credentials: dict):
-    username = credentials.get("username")
+    email = credentials.get("email") # Use email as per Supabase default
     password = credentials.get("password")
 
-    print(f"Login attempt: username={username}")
-
-    # Placeholder — always succeeds until DB is set up
-    return {"message": f"Login successful for {username}"}
+    try:
+        response = supabase.auth.sign_in_with_password({
+            "email": email, 
+            "password": password
+        })
+        # The session contains the JWT needed for authenticated orders
+        return {"access_token": response.session.access_token, "user": response.user}
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
 @app.post("/orders")
-async def place_order(order: dict):
-    username = order.get("username")
-    ticker = order.get("ticker")
-    order_type = order.get("type")  # "buy" or "sell"
-    shares = order.get("shares")
-    price = order.get("price")
-
-    print(f"ORDER: {order_type.upper()} {shares} x {ticker} @ {price} for user={username}")
-
-    # Placeholder — wire to DB later
-    return {"message": f"{order_type.capitalize()} order received for {shares} shares of {ticker}"}
+async def place_order(order: dict, token: str):
+    # Set the session so the database knows WHICH user is trading
+    supabase.postgrest.auth(token)
+    
+    # We call a custom Postgres function 'execute_trade' 
+    # that handles balance checks and portfolio updates as a single transaction
+    try:
+        result = supabase.rpc("execute_trade", {
+            "p_ticker": order.get("ticker"),
+            "p_shares": order.get("shares"),
+            "p_price": order.get("price"),
+            "p_type": order.get("type")
+        }).execute()
+        
+        return {"message": "Trade successful", "data": result.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Trade failed or insufficient funds")
