@@ -4,6 +4,10 @@ from scraper import scrape_mse_data
 from fastapi import FastAPI, HTTPException, Form, File, UploadFile
 import os
 from dotenv import load_dotenv
+from fastapi import Request
+from fastapi.responses import JSONResponse
+import traceback
+
 load_dotenv()  # Load environment variables from .env file
 app = FastAPI(title="Malawi Trading API")
 
@@ -28,6 +32,16 @@ cache = {
 @app.get("/")
 async def root():
     return {"message": "Welcome to the Malawi Trading API. Access /stocks for market data."}
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    # This prints the error to your terminal so you can see the line number
+    print(f"CRITICAL ERROR: {exc}")
+    traceback.print_exc() 
+    return JSONResponse(
+        status_code=500,
+        content={"message": "Internal Server Error", "details": str(exc)},
+    )
 
 @app.get("/stocks")
 async def get_stocks():
@@ -126,8 +140,7 @@ async def create_account(
 
     # File uploads
     certified_id: UploadFile = File(None),
-    passport_photo_1: UploadFile = File(None),
-    passport_photo_2: UploadFile = File(None),
+    passport_photo: UploadFile = File(None),
     proof_of_address: UploadFile = File(None),
     company_docs: UploadFile = File(None),
 ):
@@ -151,7 +164,7 @@ async def create_account(
         # We organize folders by user_id to keep documents segregated
         uploads = [
             ("certified_id", certified_id),
-            ("passport_photo_1", passport_photo_1),
+            ("passport_photo", passport_photo),
             ("proof_of_address", proof_of_address),
         ]
         for name, file in uploads:
