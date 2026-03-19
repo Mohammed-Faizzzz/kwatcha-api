@@ -132,6 +132,20 @@ async def validation_exception_handler(request, exc):
 async def root():
     return {"message": "Welcome to the Malawi Trading API."}
 
+@app.get("/debug/redis")
+async def debug_redis():
+    keys = redis_client.keys("prices:*")
+    stocks = {}
+    for key in keys:
+        data = redis_client.get(key)
+        if data:
+            stocks[key] = json.loads(data)
+    return {
+        "key_count": len(keys),
+        "keys": keys,
+        "data": stocks
+    }
+
 @app.get("/stocks")
 async def get_stocks():
     keys = redis_client.keys("prices:*")
