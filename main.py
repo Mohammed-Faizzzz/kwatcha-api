@@ -178,6 +178,49 @@ async def get_stocks():
         "stocks": new_data
     }
     
+@app.get("/stocks/movers")
+async def get_movers(top_n: int = 5):
+    keys = redis_client.keys("prices:*")
+    if not keys:
+        raise HTTPException(status_code=503, detail="No stock data available")
+
+    stocks = {}
+    for key in keys:
+        ticker = key.split(":")[1]
+        data = redis_client.get(key)
+        if data:
+            stocks[ticker] = json.loads(data)
+
+    entries = [{"ticker": t, **v} for t, v in stocks.items()]
+
+    sorted_by_change = sorted(entries, key=lambda x: x.get("change", 0))
+    gainers = sorted_by_change[::-1][:top_n]
+    losers = sorted_by_change[:top_n]
+
+    sorted_by_volume = sorted(entries, key=lambda x: x.get("volume", 0), reverse=True)
+    sorted_by_turnover = sorted(entries, key=lambda x: x.get("turnover", 0), reverse=True)
+
+    num_gainers = sum(1 for e in entries if e.get("change", 0) > 0)
+    num_losers = sum(1 for e in entries if e.get("change", 0) < 0)
+    num_unchanged = len(entries) - num_gainers - num_losers
+
+    return {
+        "status": "success",
+        "market": "MSE",
+        "summary": {
+            "total_stocks": len(entries),
+            "gainers": num_gainers,
+            "losers": num_losers,
+            "unchanged": num_unchanged,
+            "total_volume": sum(e.get("volume", 0) for e in entries),
+            "total_turnover": round(sum(e.get("turnover", 0) for e in entries), 2),
+        },
+        "top_gainers": gainers,
+        "top_losers": losers,
+        "highest_volume": sorted_by_volume[:top_n],
+        "highest_turnover": sorted_by_turnover[:top_n],
+    }
+
 @app.get("/stocks/{symbol}")
 async def get_stock_detail(symbol: str):
     data = redis_client.get(f"prices:{symbol.upper()}")
