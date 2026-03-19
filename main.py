@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 from fastapi import Request
 from fastapi.responses import JSONResponse
 import traceback
+from fastapi.exceptions import RequestValidationError
+
 
 load_dotenv()  # Load environment variables from .env file
 app = FastAPI(title="Malawi Trading API")
@@ -20,7 +22,7 @@ app.add_middleware(
 )
 
 URL = os.getenv("SUPABASE_URL")
-KEY = os.getenv("SUPABASE_ANON_KEY")
+KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # Use the service role key for admin operations
 
 supabase: Client = create_client(URL, KEY)
 
@@ -42,6 +44,11 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=500,
         content={"message": "Internal Server Error", "details": str(exc)},
     )
+    
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    print("VALIDATION ERROR:", exc.errors())
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 @app.get("/stocks")
 async def get_stocks():
@@ -96,12 +103,12 @@ async def create_account(
     account_type: str = Form(...),
 
     # Primary applicant
-    full_name: str = Form(None),
-    gender: str = Form(None),
-    id_type: str = Form(None),
-    id_number: str = Form(None),
-    date_of_birth: str = Form(None),
-    investor_type: str = Form(None),
+    full_name: str = Form(...),
+    gender: str = Form(...),
+    id_type: str = Form(...),
+    id_number: str = Form(...),
+    date_of_birth: str = Form(...),
+    investor_type: str = Form(...),
 
     # Joint applicant (optional)
     joint_full_name: str = Form(None),
@@ -119,19 +126,19 @@ async def create_account(
     authorised_signatory_2: str = Form(None),
 
     # Contact info
-    physical_address: str = Form(None),
+    physical_address: str = Form(...),
     postal_address: str = Form(None),
-    telephone: str = Form(None),
+    telephone: str = Form(...),
     cellphone: str = Form(None),
     fax: str = Form(None),
-    email: str = Form(None),
+    email: str = Form(...),
 
     # Bank details
     bank_name: str = Form(None),
     bank_branch_code: str = Form(None),
     account_number: str = Form(None),
     account_name: str = Form(None),
-    primary_signature_date: str = Form(None),
+    primary_signature_date: str = Form(...),
     joint_signature_date: str = Form(None),
 
     # Credentials
@@ -139,8 +146,8 @@ async def create_account(
     password: str = Form(...),
 
     # File uploads
-    certified_id: UploadFile = File(None),
-    passport_photo: UploadFile = File(None),
+    certified_id: UploadFile = File(...),
+    passport_photo: UploadFile = File(...),
     proof_of_address: UploadFile = File(None),
     company_docs: UploadFile = File(None),
 ):
@@ -150,14 +157,20 @@ async def create_account(
 
     try:
         # 1. Sign up the user (Supabase handles the password hashing)
-        auth_response = supabase.auth.sign_up({
+        print(f"Creating user with email: {email} and username: {username}")
+        
+        auth_response = supabase.auth.admin.create_user({
             "email": email,
             "password": password,
+            "email_confirm": True,  # marks them as confirmed immediately
+            "user_metadata": {
+                "username": username,
+            }
         })
-        
+
         if not auth_response.user:
-            raise HTTPException(status_code=400, detail="Signup failed")
-        
+            raise HTTPException(status_code=400, detail="User creation failed")
+
         user_id = auth_response.user.id
 
         # 2. Upload KYC Files to Private Storage
@@ -180,8 +193,6 @@ async def create_account(
             "account_type": account_type,
             "full_name": full_name,
             "id_number": id_number,
-            "bank_name": bank_name,
-            "account_number": account_number,
             "balance": 0.00 # Initializing account balance
         }
         supabase.table("profiles").insert(profile_data).execute()
@@ -189,6 +200,7 @@ async def create_account(
         return {"message": "Account created. Please verify your email."}
     
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
     print("=" * 50)
