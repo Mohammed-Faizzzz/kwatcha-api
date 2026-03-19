@@ -134,36 +134,63 @@ async def root():
 
 @app.get("/stocks")
 async def get_stocks():
-    # try redis first
     keys = redis_client.keys("prices:*")
-    if keys:
-        stocks = {}
-        for key in keys:
-            ticker = key.split(":")[1]
-            data = redis_client.get(key)
-            if data:
-                stocks[ticker] = json.loads(data)
+    if not keys:
+        print("[/stocks] Redis empty, falling back to scraper")
+        today = datetime.now().strftime("%Y-%m-%d")
+        new_data = scrape_mse_data()
         return {
             "status": "success",
             "market": "MSE",
-            "source": "cache",
-            "count": len(stocks),
-            "stocks": stocks
+            "source": "scraper",
+            "last_updated": today,
+            "count": len(new_data),
+            "stocks": new_data
         }
 
-    # fallback to scraper if Redis is empty
-    print("[/stocks] Redis empty, falling back to scraper")
-    today = datetime.now().strftime("%Y-%m-%d")
-    new_data = scrape_mse_data()
+    # fetch all current prices from redis in one pass
+    stocks = {}
+    for key in keys:
+        ticker = key.split(":")[1]
+        data = redis_client.get(key)
+        if data:
+            stocks[ticker] = json.loads(data)
+
+    # fetch all 24h prices in one query
+    try:
+        result = supabase.rpc("get_prices_24h_ago").execute()
+        prices_24h = {row["ticker"]: row["price_24h"] for row in result.data}
+    except Exception as e:
+        print(f"[/stocks] 24h price fetch failed: {e}")
+        prices_24h = {}
+
+    # calc change for each ticker
+    for ticker, stock in stocks.items():
+        current_price = stock["close"]
+        price_24h = prices_24h.get(ticker)
+
+        if price_24h and price_24h > 0:
+            change = round(current_price - price_24h, 2)
+            change_pct = round(((current_price - price_24h) / price_24h) * 100, 2)
+        else:
+            change = 0
+            change_pct = 0
+
+        stocks[ticker] = {
+            **stock,
+            "change": change,
+            "change_pct": change_pct,
+            "price_24h_ago": price_24h
+        }
+
     return {
         "status": "success",
         "market": "MSE",
-        "source": "scraper",
-        "last_updated": today,
-        "count": len(new_data),
-        "stocks": new_data
+        "source": "cache",
+        "count": len(stocks),
+        "stocks": stocks
     }
-
+    
 @app.get("/stocks/{symbol}")
 async def get_stock_detail(symbol: str):
     data = redis_client.get(f"prices:{symbol.upper()}")
