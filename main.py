@@ -149,60 +149,33 @@ async def debug_redis():
 @app.get("/stocks")
 async def get_stocks():
     keys = redis_client.keys("prices:*")
-    if not keys:
-        print("[/stocks] Redis empty, falling back to scraper")
-        today = datetime.now().strftime("%Y-%m-%d")
-        new_data = scrape_mse_data()
+
+    if keys:
+        stocks = {}
+        for key in keys:
+            ticker = key.split(":")[1]
+            data = redis_client.get(key)
+            if data:
+                stocks[ticker] = json.loads(data)
         return {
             "status": "success",
             "market": "MSE",
-            "source": "scraper",
-            "last_updated": today,
-            "count": len(new_data),
-            "stocks": new_data
+            "source": "cache",
+            "count": len(stocks),
+            "stocks": stocks
         }
 
-    # fetch all current prices from redis in one pass
-    stocks = {}
-    for key in keys:
-        ticker = key.split(":")[1]
-        data = redis_client.get(key)
-        if data:
-            stocks[ticker] = json.loads(data)
-
-    # fetch all 24h prices in one query
-    try:
-        result = supabase.rpc("get_prices_24h_ago").execute()
-        prices_24h = {row["ticker"]: row["price_24h"] for row in result.data}
-    except Exception as e:
-        print(f"[/stocks] 24h price fetch failed: {e}")
-        prices_24h = {}
-
-    # calc change for each ticker
-    for ticker, stock in stocks.items():
-        current_price = stock["close"]
-        price_24h = prices_24h.get(ticker)
-
-        if price_24h and price_24h > 0:
-            change = round(current_price - price_24h, 2)
-            change_pct = round(((current_price - price_24h) / price_24h) * 100, 2)
-        else:
-            change = 0
-            change_pct = 0
-
-        stocks[ticker] = {
-            **stock,
-            "change": change,
-            "change_pct": change_pct,
-            "price_24h_ago": price_24h
-        }
-
+    # redis empty — degraded fallback, poller will fix this shortly
+    print("[/stocks] Redis empty, falling back to scraper")
+    today = datetime.now().strftime("%Y-%m-%d")
+    new_data = scrape_mse_data()
     return {
         "status": "success",
         "market": "MSE",
-        "source": "cache",
-        "count": len(stocks),
-        "stocks": stocks
+        "source": "scraper",
+        "last_updated": today,
+        "count": len(new_data),
+        "stocks": new_data
     }
     
 @app.get("/stocks/{symbol}")
