@@ -15,7 +15,7 @@ import json
 import os
 import traceback
 from dotenv import load_dotenv
-from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.middleware.base import BaseHTTPMiddleware
 
 load_dotenv()
 
