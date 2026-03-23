@@ -2,6 +2,7 @@ from supabase import create_client, Client
 from datetime import datetime, timezone
 from decimal import Decimal
 from scraper import scrape_mse_data
+from remove_header import RemoveHeadersMiddleware
 from fastapi import FastAPI, HTTPException, Form, File, UploadFile
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -14,6 +15,7 @@ import json
 import os
 import traceback
 from dotenv import load_dotenv
+from starlette.middleware.base import BaseHTTPMiddleware
 
 load_dotenv()
 
@@ -21,15 +23,16 @@ app = FastAPI(title="Malawi Trading API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "*"],
+    allow_origins=["http://localhost:3000", "https://kwatcha-fe.vercel.app/"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RemoveHeadersMiddleware) 
 
 URL = os.getenv("SUPABASE_URL")
 KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-MSE_API_URL = "https://kwatcha-api.onrender.com/stocks"
+MSE_API_URL = "https://kwatcha-api-production.up.railway.app/stocks"
 
 print(URL, KEY)
 
