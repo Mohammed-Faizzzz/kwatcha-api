@@ -4,7 +4,6 @@ from decimal import Decimal
 from scraper import scrape_mse_data
 from remove_header import RemoveHeadersMiddleware
 from fastapi import FastAPI, HTTPException, Form, File, UploadFile
-from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +14,8 @@ import json
 import os
 import traceback
 from dotenv import load_dotenv
-from fastapi.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi import Request, Response
 
 load_dotenv()
 
@@ -33,8 +33,7 @@ URL = os.getenv("SUPABASE_URL")
 KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 MSE_API_URL = "https://kwatcha-api-production.up.railway.app/stocks"
-
-print(URL, KEY)
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")
 
 supabase: Client = create_client(URL, KEY)
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
