@@ -31,6 +31,8 @@ KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 MSE_API_URL = "https://kwatcha-api.onrender.com/stocks"
 
+print(URL, KEY)
+
 supabase: Client = create_client(URL, KEY)
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 scheduler = AsyncIOScheduler()
