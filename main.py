@@ -14,7 +14,7 @@ import json
 import os
 import traceback
 from dotenv import load_dotenv
-from starlette.middleware.base import BaseHTTPMiddleware
+# from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import Request, Response
 
 load_dotenv()
@@ -27,7 +27,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(RemoveHeadersMiddleware) 
+# app.add_middleware(RemoveHeadersMiddleware) 
 
 URL = os.getenv("SUPABASE_URL")
 KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
