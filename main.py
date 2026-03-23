@@ -23,7 +23,7 @@ app = FastAPI(title="Malawi Trading API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://kwatcha-fe.vercel.app/"],
+    allow_origins=["http://localhost:3000", "https://kwatcha-fe.vercel.app"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
