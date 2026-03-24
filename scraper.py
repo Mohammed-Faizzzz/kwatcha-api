@@ -155,7 +155,8 @@ def scrape_mse_data():
                 market_data[symbol].update({
                     "open": cols[1].text.strip().replace(',', ''),
                     "close": cols[2].text.strip().replace(',', ''),
-                    "change": cols[3].text.strip(),
+                    "change": float(cols[2].text.strip().replace(',', '')) - float(cols[1].text.strip().replace(',', '')),
+                    "pct_change": round((float(cols[2].text.strip().replace(',', '')) - float(cols[1].text.strip().replace(',', ''))) / float(cols[1].text.strip().replace(',', '')) * 100, 4),
                     "volume": cols[4].text.strip().replace(',', ''),
                     "turnover": cols[5].text.strip().replace(',', '')
                 })

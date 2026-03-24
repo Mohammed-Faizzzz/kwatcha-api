@@ -2,10 +2,10 @@ import json
 import traceback
 from datetime import datetime, timezone
 
-import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from clients import MSE_API_URL, redis_client, supabase
+from clients import redis_client, supabase
+from scraper import scrape_mse_data
 
 scheduler = AsyncIOScheduler()
 
@@ -13,17 +13,13 @@ scheduler = AsyncIOScheduler()
 async def poll_and_store_prices():
     print(f"[Poller] Running at {datetime.now(timezone.utc).isoformat()}")
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(MSE_API_URL, timeout=10)
-            response.raise_for_status()
-            data = response.json()
+        stocks = scrape_mse_data()
 
-        if data.get("status") != "success":
-            print(f"[Poller] Non-success response: {data}")
+        if not stocks:
+            print("[Poller] Scraper returned no data")
             return
 
         snapshot_at = datetime.now(timezone.utc)
-        stocks = data["stocks"]
 
         rows = [
             {
@@ -36,21 +32,29 @@ async def poll_and_store_prices():
                 "snapshot_at": snapshot_at.isoformat(),
             }
             for ticker, values in stocks.items()
+            if values["open"] is not None
         ]
 
         supabase.table("price_history").insert(rows).execute()
         print(f"[Poller] Inserted {len(rows)} rows")
 
-        for row in rows:
+        for ticker, values in stocks.items():
+            if values["open"] is None:
+                continue
+            open_price = float(values["open"])
+            close_price = float(values["close"])
+            change = close_price - open_price
+            pct_change = round(change / open_price * 100, 4) if open_price else 0.0
             redis_client.setex(
-                f"prices:{row['ticker']}",
+                f"prices:{ticker}",
                 600,  # 10 min TTL
                 json.dumps({
-                    "open": row["open"],
-                    "close": row["close"],
-                    "change": row["change"],
-                    "volume": row["volume"],
-                    "turnover": row["turnover"],
+                    "open": open_price,
+                    "close": close_price,
+                    "change": round(change, 4),
+                    "pct_change": pct_change,
+                    "volume": int(values["volume"]) if values["volume"] else 0,
+                    "turnover": float(values["turnover"]) if values["turnover"] else 0.0,
                     "updated_at": snapshot_at.isoformat()
                 })
             )
