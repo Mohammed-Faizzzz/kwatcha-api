@@ -17,6 +17,10 @@ from dotenv import load_dotenv
 from fastapi import Request, Response
 from fastapi import Header, Depends
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 load_dotenv()
 
 app = FastAPI(title="Malawi Trading API")
@@ -28,6 +32,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 # app.add_middleware(RemoveHeadersMiddleware) 
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 URL = os.getenv("SUPABASE_URL")
 KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
@@ -155,6 +163,7 @@ async def debug_redis():
     }
 
 @app.get("/stocks")
+@limiter.limit("30/minute")
 async def get_stocks():
     keys = redis_client.keys("prices:*")
 
@@ -187,6 +196,7 @@ async def get_stocks():
     }
     
 @app.get("/stocks/movers")
+@limiter.limit("30/minute")
 async def get_movers(top_n: int = 5):
     keys = redis_client.keys("prices:*")
     if not keys:
@@ -230,6 +240,7 @@ async def get_movers(top_n: int = 5):
     }
 
 @app.get("/stocks/{symbol}")
+@limiter.limit("30/minute")
 async def get_stock_detail(symbol: str):
     data = redis_client.get(f"prices:{symbol.upper()}")
     if data:
@@ -237,6 +248,7 @@ async def get_stock_detail(symbol: str):
     raise HTTPException(status_code=404, detail="Symbol not found")
 
 @app.get("/history/{ticker}")
+@limiter.limit("20/minute")
 async def get_price_history(ticker: str, days: int = 30):
     response = (
         supabase.table("price_history")
