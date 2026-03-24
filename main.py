@@ -14,8 +14,8 @@ import json
 import os
 import traceback
 from dotenv import load_dotenv
-# from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import Request, Response
+from fastapi import Header, Depends
 
 load_dotenv()
 
@@ -130,13 +130,17 @@ async def validation_exception_handler(request, exc):
     print("VALIDATION ERROR:", exc.errors())
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
+def verify_internal(x_api_key: str = Header(...)):
+    if x_api_key != INTERNAL_API_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
 # ─── Routes ──────────────────────────────────────────────────────
 
-@app.get("/")
+@app.get("/", dependencies=[Depends(verify_internal)])
 async def root():
     return {"message": "Welcome to the Malawi Trading API."}
 
-@app.get("/debug/redis")
+@app.get("/debug/redis", dependencies=[Depends(verify_internal)])
 async def debug_redis():
     keys = redis_client.keys("prices:*")
     stocks = {}
@@ -150,7 +154,7 @@ async def debug_redis():
         "data": stocks
     }
 
-@app.get("/stocks")
+@app.get("/stocks", dependencies=[Depends(verify_internal)])
 async def get_stocks():
     keys = redis_client.keys("prices:*")
 
@@ -182,7 +186,7 @@ async def get_stocks():
         "stocks": new_data
     }
     
-@app.get("/stocks/movers")
+@app.get("/stocks/movers", dependencies=[Depends(verify_internal)])
 async def get_movers(top_n: int = 5):
     keys = redis_client.keys("prices:*")
     if not keys:
@@ -225,14 +229,14 @@ async def get_movers(top_n: int = 5):
         "highest_turnover": sorted_by_turnover[:top_n],
     }
 
-@app.get("/stocks/{symbol}")
+@app.get("/stocks/{symbol}", dependencies=[Depends(verify_internal)])
 async def get_stock_detail(symbol: str):
     data = redis_client.get(f"prices:{symbol.upper()}")
     if data:
         return {"ticker": symbol.upper(), **json.loads(data)}
     raise HTTPException(status_code=404, detail="Symbol not found")
 
-@app.get("/history/{ticker}")
+@app.get("/history/{ticker}", dependencies=[Depends(verify_internal)])
 async def get_price_history(ticker: str, days: int = 30):
     response = (
         supabase.table("price_history")
