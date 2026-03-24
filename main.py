@@ -141,6 +141,16 @@ async def validation_exception_handler(request, exc):
 def verify_internal(x_api_key: str = Header(...)):
     if x_api_key != INTERNAL_API_KEY:
         raise HTTPException(status_code=403, detail="Forbidden")
+    
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={
+            "status": "error",
+            "message": "Too many requests. Please slow down.",
+        }
+    )
 
 # ─── Routes ──────────────────────────────────────────────────────
 
