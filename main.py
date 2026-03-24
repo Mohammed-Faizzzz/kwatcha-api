@@ -174,7 +174,7 @@ async def debug_redis():
 
 @app.get("/stocks")
 @limiter.limit("30/minute")
-async def get_stocks():
+async def get_stocks(request: Request):
     keys = redis_client.keys("prices:*")
 
     if keys:
@@ -207,7 +207,7 @@ async def get_stocks():
     
 @app.get("/stocks/movers")
 @limiter.limit("30/minute")
-async def get_movers(top_n: int = 5):
+async def get_movers(request: Request, top_n: int = 5):
     keys = redis_client.keys("prices:*")
     if not keys:
         raise HTTPException(status_code=503, detail="No stock data available")
@@ -251,7 +251,7 @@ async def get_movers(top_n: int = 5):
 
 @app.get("/stocks/{symbol}")
 @limiter.limit("30/minute")
-async def get_stock_detail(symbol: str):
+async def get_stock_detail(request: Request, symbol: str):
     data = redis_client.get(f"prices:{symbol.upper()}")
     if data:
         return {"ticker": symbol.upper(), **json.loads(data)}
@@ -259,7 +259,7 @@ async def get_stock_detail(symbol: str):
 
 @app.get("/history/{ticker}")
 @limiter.limit("20/minute")
-async def get_price_history(ticker: str, days: int = 30):
+async def get_price_history(request: Request, ticker: str, days: int = 30):
     response = (
         supabase.table("price_history")
         .select("close, volume, turnover, snapshot_at")
