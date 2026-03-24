@@ -40,8 +40,7 @@ async def startup():
         id="price_poller"
     )
     scheduler.start()
-    print("[Scheduler] Price poller started")
-    await poll_and_store_prices()
+    print("[Scheduler] Price poller started — first run in 5 minutes")
 
 @app.on_event("shutdown")
 async def shutdown():
