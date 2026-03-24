@@ -40,7 +40,6 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 URL = os.getenv("SUPABASE_URL")
 KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-MSE_API_URL = "https://kwatcha-api-production.up.railway.app/stocks"
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")
 
 supabase: Client = create_client(URL, KEY)
@@ -52,13 +51,10 @@ scheduler = AsyncIOScheduler()
 async def poll_and_store_prices():
     print(f"[Poller] Running at {datetime.now(timezone.utc).isoformat()}")
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(MSE_API_URL, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-
-        if data.get("status") != "success":
-            print(f"[Poller] Non-success response: {data}")
+        data = scrape_mse_data()
+        
+        if not data:
+            print("[Poller] No data returned from scraper")
             return
 
         snapshot_at = datetime.now(timezone.utc)
