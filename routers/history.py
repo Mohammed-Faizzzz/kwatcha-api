@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 
 from clients import limiter, supabase
+from datetime import datetime, timedelta, timezone
 
 router = APIRouter()
 
@@ -8,11 +9,12 @@ router = APIRouter()
 @router.get("/history/{ticker}")
 @limiter.limit("20/minute")
 async def get_price_history(request: Request, ticker: str, days: int = 30):
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     response = (
         supabase.table("price_history")
         .select("close, volume, turnover, snapshot_at")
         .eq("ticker", ticker.upper())
-        .gte("snapshot_at", f"now() - interval '{days} days'")
+        .gte("snapshot_at", cutoff)
         .order("snapshot_at", desc=False)
         .execute()
     )
