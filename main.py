@@ -136,7 +136,7 @@ def verify_internal(x_api_key: str = Header(...)):
 
 # ─── Routes ──────────────────────────────────────────────────────
 
-@app.get("/", dependencies=[Depends(verify_internal)])
+@app.get("/")
 async def root():
     return {"message": "Welcome to the Malawi Trading API."}
 
@@ -154,7 +154,7 @@ async def debug_redis():
         "data": stocks
     }
 
-@app.get("/stocks", dependencies=[Depends(verify_internal)])
+@app.get("/stocks")
 async def get_stocks():
     keys = redis_client.keys("prices:*")
 
@@ -186,7 +186,7 @@ async def get_stocks():
         "stocks": new_data
     }
     
-@app.get("/stocks/movers", dependencies=[Depends(verify_internal)])
+@app.get("/stocks/movers")
 async def get_movers(top_n: int = 5):
     keys = redis_client.keys("prices:*")
     if not keys:
@@ -229,14 +229,14 @@ async def get_movers(top_n: int = 5):
         "highest_turnover": sorted_by_turnover[:top_n],
     }
 
-@app.get("/stocks/{symbol}", dependencies=[Depends(verify_internal)])
+@app.get("/stocks/{symbol}")
 async def get_stock_detail(symbol: str):
     data = redis_client.get(f"prices:{symbol.upper()}")
     if data:
         return {"ticker": symbol.upper(), **json.loads(data)}
     raise HTTPException(status_code=404, detail="Symbol not found")
 
-@app.get("/history/{ticker}", dependencies=[Depends(verify_internal)])
+@app.get("/history/{ticker}")
 async def get_price_history(ticker: str, days: int = 30):
     response = (
         supabase.table("price_history")
