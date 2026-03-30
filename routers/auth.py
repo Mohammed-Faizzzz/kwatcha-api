@@ -99,6 +99,7 @@ async def login(credentials: dict):
             raise HTTPException(status_code=401, detail="Invalid username or password.")
         
         email = result.data["email"]
+        print(email)
 
         response = supabase.auth.sign_in_with_password({
             "email": email,
