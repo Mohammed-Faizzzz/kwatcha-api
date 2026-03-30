@@ -91,9 +91,15 @@ async def create_account(
 
 @router.post("/login")
 async def login(credentials: dict):
-    email = credentials.get("email")
+    username = credentials.get("username")
     password = credentials.get("password")
     try:
+        result = supabase.table("users").select("email").eq("username", username).single().execute()
+        if not result.data:
+            raise HTTPException(status_code=401, detail="Invalid username or password.")
+        
+        email = result.data["email"]
+
         response = supabase.auth.sign_in_with_password({
             "email": email,
             "password": password
@@ -102,8 +108,10 @@ async def login(credentials: dict):
             "access_token": response.session.access_token,
             "user": response.user
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
 
 
 @router.post("/orders")
