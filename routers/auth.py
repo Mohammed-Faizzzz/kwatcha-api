@@ -62,6 +62,7 @@ async def create_account(
             raise HTTPException(status_code=400, detail="User creation failed")
 
         user_id = auth_response.user.id
+        user_email = auth_response.user.email
 
         uploads = [
             ("certified_id", certified_id),
@@ -77,7 +78,7 @@ async def create_account(
         supabase.table("profiles").insert({
             "id": user_id,
             "username": username,
-            "email": email,
+            "email": user_email,
             "account_type": account_type,
             "full_name": full_name,
             "id_number": id_number,
