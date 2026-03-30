@@ -73,13 +73,16 @@ async def create_account(
                 path = f"{user_id}/{name}_{file.filename}"
                 content = await file.read()
                 supabase.storage.from_("kyc-documents").upload(path, content)
-
+        
         supabase.table("profiles").insert({
             "id": user_id,
+            "username": username,
+            "email": email,
             "account_type": account_type,
             "full_name": full_name,
             "id_number": id_number,
-            "balance": 0.00
+            "balance": 0.00,
+            "status": "pending"
         }).execute()
 
         return {"message": "Account created. Pending review."}
@@ -93,27 +96,34 @@ async def create_account(
 async def login(credentials: dict):
     username = credentials.get("username")
     password = credentials.get("password")
+
     try:
-        result = supabase.table("users").select("email").eq("username", username).single().execute()
+        # 1. Get email from username
+        result = supabase.table("profiles").select("email, status").eq("username", username).single().execute()
         if not result.data:
             raise HTTPException(status_code=401, detail="Invalid username or password.")
-        
-        email = result.data["email"]
-        print(email)
 
+        # 2. Check approval status before even attempting auth
+        status = result.data["status"]
+        if status == "pending":
+            raise HTTPException(status_code=403, detail="Your account is pending approval. We'll notify you by email.")
+        if status == "rejected":
+            raise HTTPException(status_code=403, detail="Your application was not approved.")
+
+        # 3. Sign in
         response = supabase.auth.sign_in_with_password({
-            "email": email,
+            "email": result.data["email"],
             "password": password
         })
         return {
             "access_token": response.session.access_token,
             "user": response.user
         }
+
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=401, detail="Invalid username or password.")
-
 
 @router.post("/orders")
 async def place_order(order: dict, token: str):
