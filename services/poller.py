@@ -20,6 +20,7 @@ async def poll_and_store_prices():
             return
 
         snapshot_at = datetime.now(timezone.utc)
+        today = snapshot_at.date().isoformat()
 
         rows = [
             {
@@ -29,14 +30,17 @@ async def poll_and_store_prices():
                 "change": float(values["change"]),
                 "volume": int(values["volume"]),
                 "turnover": float(values["turnover"]),
-                "snapshot_at": snapshot_at.isoformat(),
+                "snapshot_at": today,
             }
             for ticker, values in stocks.items()
             if values["open"] is not None
         ]
 
-        supabase.table("price_history").insert(rows).execute()
-        print(f"[Poller] Inserted {len(rows)} rows")
+        supabase.table("price_history").upsert(
+            rows,
+            on_conflict="ticker,snapshot_at"
+        ).execute()
+        print(f"[Poller] Upserted {len(rows)} rows")
 
         for ticker, values in stocks.items():
             if values["open"] is None:
