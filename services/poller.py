@@ -13,7 +13,7 @@ scheduler = AsyncIOScheduler()
 async def poll_and_store_prices():
     print(f"[Poller] Running at {datetime.now(timezone.utc).isoformat()}")
     try:
-        stocks = scrape_mse_data()
+        stocks = await scrape_mse_data()
 
         if not stocks:
             print("[Poller] Scraper returned no data")

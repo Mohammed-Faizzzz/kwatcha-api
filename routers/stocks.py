@@ -59,7 +59,7 @@ async def get_stocks(request: Request):
 
     print("[/stocks] Redis empty, falling back to scraper")
     today = datetime.now().strftime("%Y-%m-%d")
-    new_data = scrape_mse_data()
+    new_data = await scrape_mse_data()
     if not new_data:
         raise HTTPException(status_code=503, detail="Unable to fetch stock data")
     return {
