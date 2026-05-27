@@ -1,16 +1,27 @@
-import requests
+from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
-# from beautifulsoup4 import BeautifulSoup
 
 def scrape_mse_data():
     url = "https://mse.co.mw/market/mainboard"
-    headers = {"User-Agent": "Mozilla/5.0"} # Prevents some basic bot blocking
-    
-    response = requests.get(url, headers=headers)
-    if response.status_code != 200:
-        return None
 
-    soup = BeautifulSoup(response.content, "html.parser")
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False)
+        page = browser.new_page()
+        page.goto(url, wait_until="networkidle", timeout=30000)
+
+        # If Sucuri challenge page appears, click through it
+        if "GoDaddy Security" in page.title() or "Access Denied" in page.title():
+            print("[DEBUG] Challenge page detected, attempting to click through...")
+            btn = page.locator("input[type=submit], button[type=submit], button, input[type=button]").first
+            btn.click()
+            page.wait_for_load_state("networkidle", timeout=20000)
+            print(f"[DEBUG] After click — title: {page.title()}")
+
+        page.wait_for_selector("tbody", timeout=15000)
+        html = page.content()
+        browser.close()
+
+    soup = BeautifulSoup(html, "html.parser")
     rows = soup.find("tbody").find_all("tr")
     # print(rows)
 
