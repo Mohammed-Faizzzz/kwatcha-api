@@ -1,25 +1,24 @@
-from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
+import asyncio
 
-def scrape_mse_data():
+async def scrape_mse_data():
     url = "https://mse.co.mw/market/mainboard"
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        page = browser.new_page()
-        page.goto(url, wait_until="networkidle", timeout=30000)
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.goto(url, wait_until="networkidle", timeout=30000)
 
-        # If Sucuri challenge page appears, click through it
-        if "GoDaddy Security" in page.title() or "Access Denied" in page.title():
+        if "GoDaddy Security" in await page.title() or "Access Denied" in await page.title():
             print("[DEBUG] Challenge page detected, attempting to click through...")
             btn = page.locator("input[type=submit], button[type=submit], button, input[type=button]").first
-            btn.click()
-            page.wait_for_load_state("networkidle", timeout=20000)
-            print(f"[DEBUG] After click — title: {page.title()}")
+            await btn.click()
+            await page.wait_for_load_state("networkidle", timeout=20000)
 
-        page.wait_for_selector("tbody", timeout=15000)
-        html = page.content()
-        browser.close()
+        await page.wait_for_selector("tbody", timeout=15000)
+        html = await page.content()
+        await browser.close()
 
     soup = BeautifulSoup(html, "html.parser")
     rows = soup.find("tbody").find_all("tr")
@@ -175,6 +174,6 @@ def scrape_mse_data():
     return market_data
 
 if __name__ == "__main__":
-    populated_data = scrape_mse_data()
     import json
+    populated_data = asyncio.run(scrape_mse_data())
     print(json.dumps(populated_data, indent=4))
