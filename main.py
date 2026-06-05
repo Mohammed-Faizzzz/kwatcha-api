@@ -1,3 +1,4 @@
+import asyncio
 import traceback
 
 from fastapi import FastAPI, Request
@@ -9,7 +10,9 @@ from slowapi import _rate_limit_exceeded_handler
 
 from clients import limiter
 from routers import auth, history, stocks
+from routers.chat import router as chat_router
 from services.poller import poll_and_store_prices, scheduler
+from services.rag import build_index
 
 app = FastAPI(title="Malawi Trading API")
 
@@ -26,6 +29,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.include_router(stocks.router)
 app.include_router(history.router)
 app.include_router(auth.router)
+app.include_router(chat_router)
 
 
 # ─── Lifecycle ───────────────────────────────────────────────────
@@ -41,6 +45,11 @@ async def startup():
     )
     scheduler.start()
     print("[Scheduler] Price poller started — first run in 5 minutes")
+
+    try:
+        await asyncio.to_thread(build_index)
+    except Exception as e:
+        print(f"[RAG] Index build failed: {e}")
 
 @app.on_event("shutdown")
 async def shutdown():
