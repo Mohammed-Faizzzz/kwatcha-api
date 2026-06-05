@@ -202,7 +202,7 @@ def _get_collection() -> chromadb.Collection:
 
 def _embed_documents(texts: list[str]) -> list[list[float]]:
     result = gemini_client.models.embed_content(
-        model="text-embedding-004",
+        model="gemini-embedding-001",
         contents=texts,
         config=genai_types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
     )
@@ -211,7 +211,7 @@ def _embed_documents(texts: list[str]) -> list[list[float]]:
 
 def _embed_query(text: str) -> list[float]:
     result = gemini_client.models.embed_content(
-        model="text-embedding-004",
+        model="gemini-embedding-001",
         contents=[text],
         config=genai_types.EmbedContentConfig(task_type="RETRIEVAL_QUERY"),
     )

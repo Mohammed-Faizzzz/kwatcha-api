@@ -89,17 +89,24 @@ async def chat(request: Request, body: ChatRequest):
             sources=[],
         )
 
-    chunks = await asyncio.to_thread(retrieve, message, 5)
+    try:
+        chunks = await asyncio.to_thread(retrieve, message, 5)
+    except Exception as e:
+        print(f"[RAG] retrieve failed: {e}")
+        chunks = []
 
     live_prices: dict = {}
-    for key in redis_client.keys("prices:*"):
-        ticker = key.split(":")[1]
-        data = redis_client.get(key)
-        if data:
-            try:
-                live_prices[ticker] = json.loads(data)
-            except (json.JSONDecodeError, ValueError):
-                continue
+    try:
+        for key in redis_client.keys("prices:*"):
+            ticker = key.split(":")[1]
+            data = redis_client.get(key)
+            if data:
+                try:
+                    live_prices[ticker] = json.loads(data)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+    except Exception as e:
+        print(f"[Chat] Redis unavailable: {e}")
 
     context_sections: list[str] = []
 
