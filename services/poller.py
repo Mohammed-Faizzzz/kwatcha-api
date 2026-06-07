@@ -51,7 +51,7 @@ async def poll_and_store_prices():
             pct_change = round(change / open_price * 100, 4) if open_price else 0.0
             redis_client.setex(
                 f"prices:{ticker}",
-                600,  # 10 min TTL
+                86400,  # 24hr TTL — survives multiple failed polls
                 json.dumps({
                     "open": open_price,
                     "close": close_price,

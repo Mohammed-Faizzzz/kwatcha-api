@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 from typing import Literal
 
 from google.genai import types as genai_types
@@ -77,7 +76,7 @@ async def chat(request: Request, body: ChatRequest):
     if not message:
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
-    if not os.getenv("GEMINI_API_KEY"):
+    if gemini_client is None:
         raise HTTPException(status_code=503, detail="AI service not configured")
 
     if _is_clearly_off_topic(message):
