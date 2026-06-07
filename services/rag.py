@@ -1,12 +1,9 @@
 import json
-import os
 from pathlib import Path
 from typing import TypedDict
 
 import chromadb
-from google.genai import types as genai_types
-
-from clients import gemini_client
+from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
 INSIGHTS_PATH = Path(__file__).parent.parent / "insights.json"
 
@@ -185,6 +182,7 @@ _MSE_GENERAL: list[tuple[str, str, str]] = [
     ),
 ]
 
+_ef = DefaultEmbeddingFunction()
 _collection: chromadb.Collection | None = None
 
 
@@ -195,34 +193,13 @@ def _get_collection() -> chromadb.Collection:
     client = chromadb.EphemeralClient()
     _collection = client.get_or_create_collection(
         name="mse_knowledge",
+        embedding_function=_ef,
         metadata={"hnsw:space": "cosine"},
     )
     return _collection
 
 
-def _embed_documents(texts: list[str]) -> list[list[float]]:
-    result = gemini_client.models.embed_content(
-        model="gemini-embedding-001",
-        contents=texts,
-        config=genai_types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
-    )
-    return [e.values for e in result.embeddings]
-
-
-def _embed_query(text: str) -> list[float]:
-    result = gemini_client.models.embed_content(
-        model="gemini-embedding-001",
-        contents=[text],
-        config=genai_types.EmbedContentConfig(task_type="RETRIEVAL_QUERY"),
-    )
-    return result.embeddings[0].values
-
-
 def build_index() -> None:
-    if not os.getenv("GEMINI_API_KEY"):
-        print("[RAG] GEMINI_API_KEY not set — skipping index build")
-        return
-
     collection = _get_collection()
     if collection.count() > 0:
         return
@@ -309,8 +286,7 @@ def build_index() -> None:
                     "url": podcast.get("url", ""),
                 })
 
-    embeddings = _embed_documents(docs)
-    collection.add(documents=docs, ids=ids, metadatas=metas, embeddings=embeddings)
+    collection.add(documents=docs, ids=ids, metadatas=metas)
     print(f"[RAG] Indexed {len(docs)} chunks into vector store")
 
 
@@ -328,9 +304,8 @@ def retrieve(query: str, top_k: int = 5) -> list[RetrievedChunk]:
     if collection.count() == 0:
         return []
 
-    query_embedding = _embed_query(query)
     results = collection.query(
-        query_embeddings=[query_embedding],
+        query_texts=[query],
         n_results=min(top_k, collection.count()),
         include=["documents", "metadatas"],
     )

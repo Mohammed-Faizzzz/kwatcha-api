@@ -2,16 +2,15 @@ import asyncio
 import json
 from typing import Literal
 
-from google.genai import types as genai_types
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from clients import gemini_client, limiter, redis_client
+from clients import anthropic_client, limiter, redis_client
 from services.rag import retrieve
 
 router = APIRouter()
 
-# Static system prompt — placed first so it is cacheable at the API level.
+# Static system prompt placed first with cache_control so it is cacheable at the API level.
 # Dynamic context (RAG chunks + live prices) is appended per-turn in the user message.
 _SYSTEM_PROMPT = """You are Kwatcha AI, a specialist investing assistant for the Malawi Stock Exchange (MSE).
 
@@ -76,7 +75,7 @@ async def chat(request: Request, body: ChatRequest):
     if not message:
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
-    if gemini_client is None:
+    if anthropic_client is None:
         raise HTTPException(status_code=503, detail="AI service not configured")
 
     if _is_clearly_off_topic(message):
@@ -126,26 +125,22 @@ async def chat(request: Request, body: ChatRequest):
     dynamic_context = "\n\n".join(context_sections)
     user_turn = f"{dynamic_context}\n\n---\nUser question: {message}" if dynamic_context else message
 
-    # Build contents list: history + current user turn
-    contents: list[genai_types.Content] = []
+    # Build messages list: history (last 10) + current user turn
+    messages: list[dict] = []
     for msg in body.conversation_history[-10:]:
-        gemini_role = "model" if msg.role == "assistant" else "user"
-        contents.append(genai_types.Content(
-            role=gemini_role,
-            parts=[genai_types.Part(text=msg.content)],
-        ))
-    contents.append(genai_types.Content(
-        role="user",
-        parts=[genai_types.Part(text=user_turn)],
-    ))
+        messages.append({"role": msg.role, "content": msg.content})
+    messages.append({"role": "user", "content": user_turn})
 
     try:
-        response = await gemini_client.aio.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=contents,
-            config=genai_types.GenerateContentConfig(
-                system_instruction=_SYSTEM_PROMPT,
-            ),
+        response = await anthropic_client.messages.create(
+            model="claude-haiku-4-5",
+            max_tokens=1024,
+            system=[{
+                "type": "text",
+                "text": _SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            messages=messages,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {str(e)}")
@@ -163,4 +158,4 @@ async def chat(request: Request, body: ChatRequest):
             url=c["url"],
         ))
 
-    return ChatResponse(response=response.text, sources=sources)
+    return ChatResponse(response=response.content[0].text, sources=sources)
