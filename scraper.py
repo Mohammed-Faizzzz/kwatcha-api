@@ -7,22 +7,26 @@ async def scrape_mse_data():
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
-        await page.goto(url, wait_until="networkidle", timeout=30000)
+        try:
+            page = await browser.new_page()
+            await page.goto(url, wait_until="networkidle", timeout=30000)
 
-        if "GoDaddy Security" in await page.title() or "Access Denied" in await page.title():
-            print("[DEBUG] Challenge page detected, attempting to click through...")
-            btn = page.locator("input[type=submit], button[type=submit], button, input[type=button]").first
-            await btn.click()
-            await page.wait_for_load_state("networkidle", timeout=20000)
+            if "GoDaddy Security" in await page.title() or "Access Denied" in await page.title():
+                print("[DEBUG] Challenge page detected, attempting to click through...")
+                btn = page.locator("input[type=submit], button[type=submit], button, input[type=button]").first
+                await btn.click()
+                await page.wait_for_load_state("networkidle", timeout=20000)
 
-        await page.wait_for_selector("tbody", timeout=15000)
-        html = await page.content()
-        await browser.close()
+            await page.wait_for_selector("tbody", timeout=15000)
+            html = await page.content()
+        finally:
+            await browser.close()
 
     soup = BeautifulSoup(html, "html.parser")
-    rows = soup.find("tbody").find_all("tr")
-    # print(rows)
+    tbody = soup.find("tbody")
+    rows = tbody.find_all("tr") if tbody else []
+    if not rows:
+        print("[Scraper] No rows found in table body")
 
     market_data = {
         "AIRTEL": {
@@ -156,21 +160,36 @@ async def scrape_mse_data():
     }
     
     for row in rows:
-        cols = row.find_all("td")
-        if len(cols) >= 6:
+        try:
+            cols = row.find_all("td")
+            if len(cols) < 6:
+                continue
+
             # Extract symbol from the <a> tag inside the first <td>
-            symbol = cols[0].find("a").text.strip()
-            
-            if symbol in market_data:
-                market_data[symbol].update({
-                    "open": cols[1].text.strip().replace(',', ''),
-                    "close": cols[2].text.strip().replace(',', ''),
-                    "change": float(cols[2].text.strip().replace(',', '')) - float(cols[1].text.strip().replace(',', '')),
-                    "pct_change": round((float(cols[2].text.strip().replace(',', '')) - float(cols[1].text.strip().replace(',', ''))) / float(cols[1].text.strip().replace(',', '')) * 100, 4),
-                    "volume": cols[4].text.strip().replace(',', ''),
-                    "turnover": cols[5].text.strip().replace(',', '')
-                })
-    
+            symbol_tag = cols[0].find("a")
+            if symbol_tag is None:
+                continue
+            symbol = symbol_tag.text.strip()
+
+            if symbol not in market_data:
+                continue
+
+            open_price = float(cols[1].text.strip().replace(',', ''))
+            close_price = float(cols[2].text.strip().replace(',', ''))
+            pct_change = round((close_price - open_price) / open_price * 100, 4) if open_price else 0.0
+
+            market_data[symbol].update({
+                "open": cols[1].text.strip().replace(',', ''),
+                "close": cols[2].text.strip().replace(',', ''),
+                "change": close_price - open_price,
+                "pct_change": pct_change,
+                "volume": cols[4].text.strip().replace(',', ''),
+                "turnover": cols[5].text.strip().replace(',', '')
+            })
+        except (ValueError, AttributeError, IndexError) as e:
+            print(f"[Scraper] Skipping malformed row: {e}")
+            continue
+
     return market_data
 
 if __name__ == "__main__":

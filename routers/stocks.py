@@ -4,29 +4,43 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from clients import limiter, redis_client
+from clients import limiter, redis_client, safe_redis_get, safe_redis_keys
 from dependencies import verify_internal
 from scraper import scrape_mse_data
 
 router = APIRouter()
 
+MAX_TOP_N = 50
+
 
 @router.get("/debug/flush-prices", dependencies=[Depends(verify_internal)])
 async def flush_prices():
-    keys = redis_client.keys("prices:*")
-    if keys:
-        redis_client.delete(*keys)
+    try:
+        keys = redis_client.keys("prices:*")
+        if keys:
+            redis_client.delete(*keys)
+    except Exception as e:
+        print(f"[/debug/flush-prices] Redis error: {e}")
+        raise HTTPException(status_code=503, detail="Cache service unavailable. Please try again later.")
     return {"status": "success", "flushed": len(keys)}
 
 
 @router.get("/debug/redis", dependencies=[Depends(verify_internal)])
 async def debug_redis():
-    keys = redis_client.keys("prices:*")
+    try:
+        keys = redis_client.keys("prices:*")
+    except Exception as e:
+        print(f"[/debug/redis] Redis error: {e}")
+        raise HTTPException(status_code=503, detail="Cache service unavailable. Please try again later.")
+
     stocks = {}
     for key in keys:
-        data = redis_client.get(key)
+        data = safe_redis_get(key)
         if data:
-            stocks[key] = json.loads(data)
+            try:
+                stocks[key] = json.loads(data)
+            except (json.JSONDecodeError, ValueError):
+                continue
     return {
         "key_count": len(keys),
         "keys": keys,
@@ -37,31 +51,39 @@ async def debug_redis():
 @router.get("/stocks")
 @limiter.limit("30/minute")
 async def get_stocks(request: Request):
-    keys = redis_client.keys("prices:*")
+    keys = safe_redis_keys("prices:*")
 
     if keys:
         stocks = {}
         for key in keys:
-            ticker = key.split(":")[1]
-            data = redis_client.get(key)
+            parts = key.split(":")
+            if len(parts) < 2:
+                continue
+            ticker = parts[1]
+            data = safe_redis_get(key)
             if data:
                 try:
                     stocks[ticker] = json.loads(data)
                 except (json.JSONDecodeError, ValueError):
                     continue
-        return {
-            "status": "success",
-            "market": "MSE",
-            "source": "cache",
-            "count": len(stocks),
-            "stocks": stocks
-        }
+        if stocks:
+            return {
+                "status": "success",
+                "market": "MSE",
+                "source": "cache",
+                "count": len(stocks),
+                "stocks": stocks
+            }
 
-    print("[/stocks] Redis empty, falling back to scraper")
+    print("[/stocks] Redis empty or unavailable, falling back to scraper")
     today = datetime.now().strftime("%Y-%m-%d")
-    new_data = await scrape_mse_data()
+    try:
+        new_data = await scrape_mse_data()
+    except Exception as e:
+        print(f"[/stocks] Scraper exception: {e}")
+        raise HTTPException(status_code=503, detail="Unable to fetch stock data. Please try again shortly.")
     if not new_data:
-        raise HTTPException(status_code=503, detail="Unable to fetch stock data")
+        raise HTTPException(status_code=503, detail="Unable to fetch stock data. Please try again shortly.")
     return {
         "status": "success",
         "market": "MSE",
@@ -73,21 +95,32 @@ async def get_stocks(request: Request):
 
 
 @router.get("/stocks/movers")
-@limiter.limit("30/minute") # MODIFY TO USE CHANGE/PCT_CHANGE
+@limiter.limit("30/minute")
 async def get_movers(request: Request, top_n: int = 5):
-    keys = redis_client.keys("prices:*")
+    if top_n <= 0:
+        raise HTTPException(status_code=400, detail="top_n must be a positive integer.")
+    if top_n > MAX_TOP_N:
+        raise HTTPException(status_code=400, detail=f"top_n cannot exceed {MAX_TOP_N}.")
+
+    keys = safe_redis_keys("prices:*")
     if not keys:
-        raise HTTPException(status_code=503, detail="No stock data available")
+        raise HTTPException(status_code=503, detail="No stock data available right now. Please try again shortly.")
 
     stocks = {}
     for key in keys:
-        ticker = key.split(":")[1]
-        data = redis_client.get(key)
+        parts = key.split(":")
+        if len(parts) < 2:
+            continue
+        ticker = parts[1]
+        data = safe_redis_get(key)
         if data:
             try:
                 stocks[ticker] = json.loads(data)
             except (json.JSONDecodeError, ValueError):
                 continue
+
+    if not stocks:
+        raise HTTPException(status_code=503, detail="No stock data available right now. Please try again shortly.")
 
     entries = [{"ticker": t, **v} for t, v in stocks.items()]
 
@@ -129,7 +162,18 @@ async def get_movers(request: Request, top_n: int = 5):
 @router.get("/stocks/{symbol}")
 @limiter.limit("30/minute")
 async def get_stock_detail(request: Request, symbol: str):
-    data = redis_client.get(f"prices:{symbol.upper()}")
-    if data:
-        return {"ticker": symbol.upper(), **json.loads(data)}
-    raise HTTPException(status_code=404, detail="Symbol not found")
+    symbol = symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Symbol cannot be empty.")
+
+    data = safe_redis_get(f"prices:{symbol.upper()}")
+    if not data:
+        raise HTTPException(status_code=404, detail=f"Symbol '{symbol.upper()}' not found.")
+
+    try:
+        parsed = json.loads(data)
+    except (json.JSONDecodeError, ValueError):
+        print(f"[/stocks/{symbol}] Corrupt cache entry")
+        raise HTTPException(status_code=503, detail="Stock data is temporarily unavailable. Please try again shortly.")
+
+    return {"ticker": symbol.upper(), **parsed}

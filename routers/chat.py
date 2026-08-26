@@ -10,6 +10,8 @@ from services.rag import retrieve
 
 router = APIRouter()
 
+MAX_MESSAGE_LENGTH = 2000
+
 # Static system prompt placed first with cache_control so it is cacheable at the API level.
 # Dynamic context (RAG chunks + live prices) is appended per-turn in the user message.
 _SYSTEM_PROMPT = """You are Kwatcha AI, a specialist investing assistant for the Malawi Stock Exchange (MSE).
@@ -74,6 +76,11 @@ async def chat(request: Request, body: ChatRequest):
     message = body.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="Message cannot be empty")
+    if len(message) > MAX_MESSAGE_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Message is too long ({len(message)} characters). Please limit it to {MAX_MESSAGE_LENGTH} characters."
+        )
 
     if anthropic_client is None:
         raise HTTPException(status_code=503, detail="AI service not configured")
@@ -143,7 +150,11 @@ async def chat(request: Request, body: ChatRequest):
             messages=messages,
         )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM error: {str(e)}")
+        print(f"[Chat] Anthropic API error: {e}")
+        raise HTTPException(status_code=502, detail="The AI assistant is temporarily unavailable. Please try again shortly.")
+
+    if not response.content or not getattr(response.content[0], "text", None):
+        raise HTTPException(status_code=502, detail="The AI assistant returned an empty response. Please try again.")
 
     seen_titles: set[str] = set()
     sources: list[Source] = []

@@ -234,57 +234,72 @@ def build_index() -> None:
             "url": "https://mse.co.mw",
         })
 
+    insights: dict = {}
     if INSIGHTS_PATH.exists():
-        with open(INSIGHTS_PATH) as f:
-            insights: dict = json.load(f)
+        try:
+            with open(INSIGHTS_PATH) as f:
+                insights = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"[RAG] Failed to load insights.json, continuing without it: {e}")
+            insights = {}
 
-        for ticker, data in insights.items():
-            for i, article in enumerate(data.get("articles", [])):
-                text = (
-                    f"Ticker: {ticker} | News: {article['title']} "
-                    f"(published {article.get('date', 'unknown date')})"
-                )
-                docs.append(text)
-                ids.append(f"article_{ticker}_{i}")
-                metas.append({
-                    "ticker": ticker,
-                    "type": "article",
-                    "title": article["title"],
-                    "date": article.get("date", ""),
-                    "url": article.get("url", ""),
-                })
+    for ticker, data in insights.items():
+        if not isinstance(data, dict):
+            continue
 
-            for i, update in enumerate(data.get("trading_updates", [])):
-                text = (
-                    f"Ticker: {ticker} | Trading Update: {update['title']} "
-                    f"({update.get('date', 'unknown date')}) — {update.get('type', '')}"
-                )
-                docs.append(text)
-                ids.append(f"update_{ticker}_{i}")
-                metas.append({
-                    "ticker": ticker,
-                    "type": "trading_update",
-                    "title": update["title"],
-                    "date": update.get("date", ""),
-                    "url": "",
-                })
+        for i, article in enumerate(data.get("articles", [])):
+            title = article.get("title")
+            if not title:
+                continue
+            text = (
+                f"Ticker: {ticker} | News: {title} "
+                f"(published {article.get('date', 'unknown date')})"
+            )
+            docs.append(text)
+            ids.append(f"article_{ticker}_{i}")
+            metas.append({
+                "ticker": ticker,
+                "type": "article",
+                "title": title,
+                "date": article.get("date", ""),
+                "url": article.get("url", ""),
+            })
 
-            for i, podcast in enumerate(data.get("podcasts", [])):
-                if not podcast.get("title"):
-                    continue
-                text = (
-                    f"Ticker: {ticker} | Podcast/Media: {podcast['title']} "
-                    f"({podcast.get('date', '')})"
-                )
-                docs.append(text)
-                ids.append(f"podcast_{ticker}_{i}")
-                metas.append({
-                    "ticker": ticker,
-                    "type": "podcast",
-                    "title": podcast["title"],
-                    "date": podcast.get("date", ""),
-                    "url": podcast.get("url", ""),
-                })
+        for i, update in enumerate(data.get("trading_updates", [])):
+            title = update.get("title")
+            if not title:
+                continue
+            text = (
+                f"Ticker: {ticker} | Trading Update: {title} "
+                f"({update.get('date', 'unknown date')}) — {update.get('type', '')}"
+            )
+            docs.append(text)
+            ids.append(f"update_{ticker}_{i}")
+            metas.append({
+                "ticker": ticker,
+                "type": "trading_update",
+                "title": title,
+                "date": update.get("date", ""),
+                "url": "",
+            })
+
+        for i, podcast in enumerate(data.get("podcasts", [])):
+            title = podcast.get("title")
+            if not title:
+                continue
+            text = (
+                f"Ticker: {ticker} | Podcast/Media: {title} "
+                f"({podcast.get('date', '')})"
+            )
+            docs.append(text)
+            ids.append(f"podcast_{ticker}_{i}")
+            metas.append({
+                "ticker": ticker,
+                "type": "podcast",
+                "title": title,
+                "date": podcast.get("date", ""),
+                "url": podcast.get("url", ""),
+            })
 
     collection.add(documents=docs, ids=ids, metadatas=metas)
     print(f"[RAG] Indexed {len(docs)} chunks into vector store")
@@ -300,6 +315,9 @@ class RetrievedChunk(TypedDict):
 
 
 def retrieve(query: str, top_k: int = 5) -> list[RetrievedChunk]:
+    if not query or not query.strip():
+        return []
+
     collection = _get_collection()
     if collection.count() == 0:
         return []

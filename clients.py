@@ -23,3 +23,21 @@ limiter = Limiter(key_func=get_remote_address)
 anthropic_client: anthropic.AsyncAnthropic | None = (
     anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
 )
+
+
+def safe_redis_keys(pattern: str) -> list[str]:
+    """Redis-down-safe wrapper for KEYS. Returns [] instead of raising."""
+    try:
+        return redis_client.keys(pattern)
+    except redis.exceptions.RedisError as e:
+        print(f"[Redis] keys({pattern!r}) failed: {e}")
+        return []
+
+
+def safe_redis_get(key: str) -> str | None:
+    """Redis-down-safe wrapper for GET. Returns None instead of raising."""
+    try:
+        return redis_client.get(key)
+    except redis.exceptions.RedisError as e:
+        print(f"[Redis] get({key!r}) failed: {e}")
+        return None

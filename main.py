@@ -61,17 +61,31 @@ async def shutdown():
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    print(f"CRITICAL ERROR: {exc}")
+    print(f"CRITICAL ERROR on {request.method} {request.url.path}: {exc}")
     traceback.print_exc()
     return JSONResponse(
         status_code=500,
-        content={"message": "Internal Server Error", "details": str(exc)},
+        content={
+            "status": "error",
+            "message": "Something went wrong on our end. Please try again shortly.",
+        },
     )
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     print("VALIDATION ERROR:", exc.errors())
-    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    friendly_errors = [
+        {"field": ".".join(str(p) for p in err["loc"] if p != "body"), "message": err["msg"]}
+        for err in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=422,
+        content={
+            "status": "error",
+            "message": "Some of the submitted data is invalid.",
+            "errors": friendly_errors,
+        },
+    )
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
